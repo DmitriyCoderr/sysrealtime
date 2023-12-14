@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Система регистрации метеонаблюдений</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 20px;
+            background-color: #f0f0f0;
+        }
+
+        #weatherData, #financialData {
+            display: inline-block;
+            text-align: left;
+            background-color: white;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        #emergencyButtons {
+            margin-top: 20px;
+        }
+
+        .emergencyButton {
+            padding: 10px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 5px;
+            background-color: #ff4d4d;
+            border: none;
+            color: white;
+            border-radius: 5px;
+        }
+
+        .emergencyButton:hover {
+            background-color: #e60000;
+        }
+
+        canvas {
+            margin-top: 20px;
+        }
+
+        #fireAnimation, #floodAnimation {
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            background-color: rgba(255, 0, 0, 0.2);
+            z-index: 1;
+            display: none;
+        }
+
+        .resetButton {
+            padding: 10px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 10px;
+            background-color: #339933;
+            border: none;
+            color: white;
+            border-radius: 5px;
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .resetButtonActive {
+            opacity: 1;
+            cursor: pointer;
+        }
+
+        .resetButton:hover {
+            background-color: #267326;
+        }
+
+        #log, #financialLog {
+            margin-top: 20px;
+            text-align: left;
+            max-height: 200px;
+            overflow-y: auto;
+            padding: 10px;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        #overlay {
+            position: fixed;
+            display: none;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            background-color: rgba(0, 0, 0, 0.7);
+            z-index: 2;
+        }
+
+        #timer {
+            color: white;
+            font-size: 20px;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 3;
+            display: none;
+        }
+
+        .emergencyMessage {
+            color: red;
+            font-size: 24px;
+            font-weight: bold;
+            animation: blinker 1s linear infinite;
+        }
+
+        @keyframes blinker {
+            50% {
+                opacity: 0;
+            }
+        }
+
+        #income, #expenses, #profit {
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+<div id="overlay"></div>
+<div id="fireAnimation" class="emergencyAnimation"></div>
+<div id="floodAnimation" class="emergencyAnimation"></div>
+<div id="timer"></div>
+
+<h4 style="color: #333;">Студент группы ПИ-425Б Бакунин Дмитрий</h4>
+<h1 style="color: #333;">Система регистрации метеонаблюдений</h1>
+<div id="emergencyMessage" class="emergencyMessage"></div>
+
+<div id="weatherData">
+    <h2 id="weatherTitle">Данные о погоде:</h2>
+    <p id="temperature">Температура: -</p>
+    <p id="humidity">Влажность: -</p>
+    <p id="pressure">Давление: -</p>
+</div>
+
+<div id="financialData">
+    <h2 id="financialTitle">Финансовые данные:</h2>
+    <p id="income">Доходы: 0</p>
+    <p id="expenses">Расходы: 0</p>
+    <p id="profit">Прибыль: 0</p>
+</div>
+
+<div id="emergencyButtons">
+    <button class="emergencyButton" onclick="handleEmergency('fire')">Перегрев датчиков</button>
+    <button class="emergencyButton" onclick="handleEmergency('flood')">Выход из строя</button>
+    <button class="resetButton" onclick="resetEmergency()" id="resetButton" disabled>Устранить аварийную ситуацию</button>
+</div> 
+
+<canvas id="chart" width="800" height="400"></canvas>
+
+<div id="log"></div>
+
+<div id="financialLog"></div>
+
+<script>
+    const weatherData = {
+        temperature: [],
+        humidity: [],
+        pressure: []
+    };
+
+    const chart = new Chart(document.getElementById('chart').getContext('2d'), {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [
+                { label: 'Температура', data: weatherData.temperature, borderColor: 'red' },
+                { label: 'Влажность', data: weatherData.humidity, borderColor: 'blue' },
+                { label: 'Давление', data: weatherData.pressure, borderColor: 'green' },
+            ]
+        },
+        options: {
+            scales: {
+                x: { type: 'linear', position: 'bottom' }
+		}
+        }
+    });
+
+    function updateWeatherData() {
+        let newTemperature, newHumidity, newPressure;
+
+        if (!isEmergencyActive()) {
+            newTemperature = 25 + Math.random() * 3;
+            newHumidity = 50 + Math.random() * 3;
+            newPressure = 1015 + Math.random() * 3;
+        } else {
+            if (getEmergencyType() === 'Перегрев датчиков') {
+                newTemperature = 75 + Math.random() * 5;
+                newHumidity = 5 + Math.random() * 1;
+                newPressure = 0;  // давление не учитываем при пожаре
+            } else {
+                newTemperature = 0;
+                newHumidity = 0;
+                newPressure = 0;  // влажность не учитываем при наводнении
+            }
+        }
+
+        weatherData.temperature.push(newTemperature);
+        weatherData.humidity.push(newHumidity);
+        weatherData.pressure.push(newPressure);
+
+        weatherData.temperature = weatherData.temperature.slice(-20);
+        weatherData.humidity = weatherData.humidity.slice(-20);
+        weatherData.pressure = weatherData.pressure.slice(-20);
+
+        chart.data.labels = Array.from({ length: weatherData.temperature.length }, (_, i) => i + 1);
+        chart.data.datasets[0].data = weatherData.temperature;
+        chart.data.datasets[1].data = weatherData.humidity;
+        chart.data.datasets[2].data = weatherData.pressure;
+
+        chart.update();
+
+        document.getElementById('temperature').innerText = `Температура: ${newTemperature.toFixed(2)}°C`;
+        document.getElementById('humidity').innerText = `Влажность: ${newHumidity.toFixed(2)}%`;
+        document.getElementById('pressure').innerText = `Давление: ${newPressure.toFixed(2)} мм.рт.ст.`;
+
+        if (!isEmergencyActive()) {
+            addToLog(`Обновлены данные: Температура: ${newTemperature.toFixed(2)}°C, Влажность: ${newHumidity.toFixed(2)}%, Давление: ${newPressure.toFixed(2)} мм.рт.ст.}`);
+        } else {
+            addToLog(`Обновлены данные: Температура: ${newTemperature.toFixed(2)}°C, Влажность: ${newHumidity.toFixed(2)}%, Давление: ${newPressure.toFixed(2)} мм.рт.ст.}`, 'red');
+        }
+    }
+
+    let income = 0;
+    let expenses = 0;
+    let profit = 0;
+    let activeEmergency = null;
+    function handleEmergency(type) {
+      if (activeEmergency) {
+            alert('Необходимо завершить текущую аварийную ситуацию.');
+            return;
+        }
+        document.getElementById('resetButton').disabled = false;
+        document.getElementById('resetButton').classList.add('resetButtonActive');
+        if (type === 'fire') {
+            simulateEmergency('Перегрев датчиков');
+            expenses += 30; // Примерный расход на ремонт (уменьшил для наглядности)
+        } else if (type === 'flood') {
+            simulateEmergency('Выход из строя датчиков');
+            expenses += 45; // Примерный расход на ремонт (уменьшил для наглядности)
+        }
+        // Добавим следующую строку для установки переменной timerIsActive в true
+      activeEmergency = type;  
+      timerIsActive = true;
+    }
+
+
+    function simulateEmergency(emergencyType) {
+        addToLog(`Аварийная ситуация: ${emergencyType}`, 'red');
+        document.getElementById('emergencyMessage').innerText = `Аварийная ситуация: ${emergencyType}`;
+        document.getElementById('emergencyMessage').style.display = 'block';
+
+        document.getElementById('temperature').innerText = 'Температура: -';
+        document.getElementById('humidity').innerText = 'Влажность: -';
+        document.getElementById('pressure').innerText = 'Давление: -';
+
+        document.getElementById('timer').style.display = 'block';
+        let timeLeft = 5;
+        let timerIsActive = false;
+
+        const timerInterval = setInterval(() => {
+            if (timerIsActive) {
+                document.getElementById('timer').innerText = `Устранение через ${timeLeft} сек.`;
+                timeLeft -= 1;
+                if (timeLeft < 0) {
+                    clearInterval(timerInterval);
+                    resetEmergency();
+                }
+            }
+        }, 1000);
+
+        // Allow user interaction during the emergency
+        document.getElementById('overlay').addEventListener('click', () => {
+            timerIsActive = true;
+        });
+
+        // Allow user interaction during the emergency
+        document.getElementById('timer').addEventListener('click', () => {
+            timerIsActive = true;
+        });
+    }
+
+    function resetEmergency() {
+        addToLog('Аварийная ситуация успешно устранена', 'green');
+        document.getElementById('emergencyMessage').style.display = 'none';
+        document.getElementById('resetButton').disabled = true;
+        document.getElementById('resetButton').classList.remove('resetButtonActive');
+        document.getElementById('timer').innerText = '';
+        document.getElementById('overlay').style.display = 'none';
+        stopEmergencyAnimation();
+        resetChartData();
+        activeEmergency = null;
+    }
+
+    function updateFinancialData() {
+        const balance = income - expenses;
+        profit = income - expenses;
+        document.getElementById('income').innerText = `Доходы: ${income} долларов`;
+        document.getElementById('expenses').innerText = `Расходы: ${expenses} долларов`;
+        document.getElementById('profit').innerText = `Прибыль: ${profit} долларов`;
+
+        // Добавлено выделение цветом в зависимости от знака
+        document.getElementById('income').style.color = income >= 0 ? 'green' : 'red';
+        document.getElementById('expenses').style.color = expenses >= 0 ? 'green' : 'red';
+        document.getElementById('profit').style.color = profit >= 0 ? 'green' : 'red';
+    }
+
+    function stopEmergencyAnimation() {
+        document.getElementById('fireAnimation').style.display = 'none';
+        document.getElementById('floodAnimation').style.display = 'none';
+    }
+
+    function resetChartData() {
+        weatherData.temperature = Array(20).fill(null);
+        weatherData.humidity = Array(20).fill(null);
+        weatherData.pressure = Array(20).fill(null);
+
+        chart.data.labels = Array.from({ length: weatherData.temperature.length }, (_, i) => i + 1);
+        chart.data.datasets[0].data = weatherData.temperature;
+        chart.data.datasets[1].data = weatherData.humidity;
+        chart.data.datasets[2].data = weatherData.pressure;
+
+        chart.update();
+    }
+
+    function addToLog(message, color) {
+        const logElement = document.getElementById('log');
+        const logEntry = document.createElement('p');
+        logEntry.textContent = `${getCurrentTime()} - ${message}`;
+        if (color) {
+            logEntry.style.color = color;
+        }
+        logElement.appendChild(logEntry);
+    }
+
+    function getCurrentTime() {
+        const now = new Date();
+        const hours = now.getHours().toString().padStart(2, '0');
+        const minutes = now.getMinutes().toString().padStart(2, '0');
+        const seconds = now.getSeconds().toString().padStart(2, '0');
+        return `${hours}:${minutes}:${seconds}`;
+    }
+
+    function updateFinancialData() {
+        const balance = income - expenses;
+        profit = income - expenses;
+        document.getElementById('income').innerText = `Доходы: ${income} долларов`;
+        document.getElementById('expenses').innerText = `Расходы: ${expenses} долларов`;
+        document.getElementById('profit').innerText = `Прибыль: ${profit} долларов`;
+
+        // Добавлено выделение цветом в зависимости от знака
+        document.getElementById('income').style.color = income >= 0 ? 'green' : 'red';
+        document.getElementById('expenses').style.color = expenses >= 0 ? 'green' : 'red';
+        document.getElementById('profit').style.color = profit >= 0 ? 'green' : 'red';
+    }
+
+    function isEmergencyActive() {
+        return document.getElementById('emergencyMessage').style.display === 'block';
+    }
+
+    function getEmergencyType() {
+        return document.getElementById('emergencyMessage').innerText.split(': ')[1];
+    }
+ function addToFinancialLog(message, color) {
+        const financialLogElement = document.getElementById('financialLog');
+        const financialLogEntry = document.createElement('p');
+        financialLogEntry.textContent = `${getCurrentTime()} - ${message}`;
+        if (color) {
+            financialLogEntry.style.color = color;
+        }
+        financialLogElement.appendChild(financialLogEntry);
+    }
+    setInterval(updateWeatherData, 1000);
+
+    setInterval(() => {
+        expenses += 5; // Примерная аренда сервера (уменьшил для наглядности)
+        addToFinancialLog(`Аренда сервера: списано 5 долларов`);
+        updateFinancialData();
+    }, 30000); // Каждые 30 секунд (30000 миллисекунд)
+
+    setInterval(() => {
+        expenses += 35; // Примерная замена датчиков (уменьшил для наглядности)
+        addToFinancialLog(`Плановая замена датчиков: списано 25 долларов`);
+        updateFinancialData();
+    }, 60000); // Каждую минуту (60000 миллисекунд)
+
+    setInterval(() => {
+        income += 50; // Примерная продажа данных (уменьшил для наглядности)
+        addToFinancialLog(`Продажа данных: получено 90 долларов`);
+        updateFinancialData();
+    }, 20000); // Каждые 20 секунд (20000 миллисекунд)
+</script>
+</body>
+</html>
